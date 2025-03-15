@@ -1,0 +1,13 @@
+.git
+.gitignore
+.env
+.env.example
+venv
+__pycache__
+*.pyc
+.ruff_cache
+LICENSE
+README.md
+.github
+data
+config
