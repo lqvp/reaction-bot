@@ -182,6 +182,7 @@ def categorize_emoji(emoji, raw_categories):
 
 async def process_and_save_emojis():
     """絵文字を取得・処理・保存する"""
+    os.makedirs("data", exist_ok=True)
     print("カスタム絵文字を取得しています...")
     all_emojis = await fetch_custom_emojis()
 
