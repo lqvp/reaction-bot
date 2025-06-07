@@ -11,7 +11,7 @@ import time
 from src.preprocess_emojis import EMOTION_CATEGORIES
 import logging
 from collections import defaultdict
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, constr
 
 # 環境変数のロード
 load_dotenv("config/.env")
@@ -208,9 +208,10 @@ EMOJI_DATA = load_emoji_data()
 
 
 class ReactionResponse(BaseModel):
-    reactions: str = Field(
+    reactions: constr(pattern=r"^:[a-zA-Z0-9_-]+:$") = Field(
         description="提案されたMisskeyカスタム絵文字 (例: :blobcat_uwu:)"
     )
+    # :name: 形式で、name部分は英数字、アンダースコア、ハイフンのみを許可
 
 
 def create_prompt_for_reaction(note_text, emoji_examples):
