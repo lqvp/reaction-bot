@@ -15,8 +15,7 @@ services:
     user: "0:0" # rootユーザーとして実行
     volumes:
       - ./config/.env:/app/config/.env:ro
-      - ./data/emojis_raw.json:/app/data/emojis_raw.json
-      - ./data/emojis_processed.json:/app/data/emojis_processed.json
+      - ./data:/app/data # Mount the entire data directory
     command: ["python", "main.py", "--mode", "preprocess"]
     profiles:
       - preprocess

@@ -4,13 +4,19 @@ Misskey Reaction Bot - Unified Entry Point
 Supports both bot operation and emoji preprocessing
 """
 
-import asyncio
 import argparse
-from src.bot import main
-from src.preprocess_emojis import process_and_save_emojis
+import asyncio
+
+from src.bot import main as bot_main
+from src.preprocess import main as preprocess_main
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
+    """Parse command line arguments.
+
+    Returns:
+        Parsed arguments
+    """
     parser = argparse.ArgumentParser(description="Misskey Reaction Bot")
     parser.add_argument(
         "--mode",
@@ -21,12 +27,15 @@ def parse_args():
     return parser.parse_args()
 
 
-if __name__ == "__main__":
+def main() -> None:
+    """Main entry point."""
     args = parse_args()
 
     if args.mode == "bot":
-        asyncio.run(main())
+        asyncio.run(bot_main())
     elif args.mode == "preprocess":
-        asyncio.run(process_and_save_emojis())
-    else:
-        print("Invalid mode. Use 'bot' or 'preprocess'.")
+        asyncio.run(preprocess_main())
+
+
+if __name__ == "__main__":
+    main()
