@@ -18,7 +18,10 @@ class MisskeyClient:
         """Initialize Misskey client."""
         self.api_url = config.misskey.api_url
         self.token = config.misskey.token
-        self.headers = {"Content-Type": "application/json"}
+        self.headers = {
+            "Content-Type": "application/json",
+            "User-Agent": config.misskey.http_user_agent,
+        }
 
     async def _make_request(
         self, endpoint: str, data: Dict[str, Any] | None = None

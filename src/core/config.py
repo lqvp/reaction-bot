@@ -24,6 +24,11 @@ class MisskeyConfig(BaseModel):
         default_factory=lambda: os.getenv("WS_SECURE", "true").lower()
         in ["true", "1", "yes"]
     )
+    http_user_agent: str = Field(
+        default_factory=lambda: os.getenv(
+            "HTTP_USER_AGENT", "MisskeyReactionBot/1.0"
+        )
+    )
 
     @computed_field  # type: ignore[misc]
     @property
