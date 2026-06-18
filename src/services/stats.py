@@ -22,7 +22,7 @@ class StatsService:
             "skipped_notes": 0,
             "errors": 0,
             "ws_disconnect_count": 0,
-            "gemini_success_count": 0,
+            "llm_success_count": 0,
             "random_fallback_count": 0,
             "unicode_fallback_count": 0,
             "reaction_counts": defaultdict(int),
@@ -33,6 +33,8 @@ class StatsService:
 
     async def start_periodic_logging(self) -> None:
         """Start the periodic statistics logging task."""
+        if self._running:
+            return
         self._running = True
         self._stats_task = asyncio.create_task(self._periodic_logger())
         logger.info(f"Started statistics logging (interval: {config.stats.interval}s)")
@@ -118,7 +120,7 @@ class StatsService:
         summary.extend(
             [
                 "\n  リアクション生成ソース:",
-                f"    - Gemini API成功: {self.stats['gemini_success_count']}",
+                f"    - LLM API成功: {self.stats['llm_success_count']}",
                 f"    - ランダム絵文字フォールバック: {self.stats['random_fallback_count']}",
                 f"    - Unicode絵文字フォールバック: {self.stats['unicode_fallback_count']}",
             ]

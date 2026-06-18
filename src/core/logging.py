@@ -165,7 +165,7 @@ def _configure_third_party_loggers() -> None:
     third_party_loggers = {
         "websockets": logging.WARNING,
         "aiohttp": logging.WARNING,
-        "google": logging.WARNING,
+        "httpx": logging.WARNING,
     }
 
     for logger_name, level in third_party_loggers.items():
@@ -233,35 +233,3 @@ def get_logger(name: str) -> CustomLogger:
         Custom logger instance with success method
     """
     return logging.getLogger(name)  # type: ignore[return-value]
-
-
-def add_file_handler(
-    logger: logging.Logger,
-    filename: str,
-    level: Optional[str] = None,
-    formatter: Optional[logging.Formatter] = None,
-) -> None:
-    """Add a file handler to the specified logger.
-
-    Args:
-        logger: Logger to add handler to
-        filename: Log file path
-        level: Log level for the file handler (optional)
-        formatter: Custom formatter (optional)
-    """
-    file_handler = logging.FileHandler(filename, encoding="utf-8")
-
-    if level:
-        file_handler.setLevel(_get_log_level(level))
-
-    if formatter:
-        file_handler.setFormatter(formatter)
-    else:
-        # Use plain formatter for file output (no colors)
-        plain_formatter = logging.Formatter(
-            fmt="%(asctime)s [%(name)s] %(levelname)-8s %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S",
-        )
-        file_handler.setFormatter(plain_formatter)
-
-    logger.addHandler(file_handler)

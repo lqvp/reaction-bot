@@ -5,7 +5,7 @@ import logging
 import os
 from typing import Any, Dict, List
 
-from src.clients.gemini import GeminiClient
+from src.clients.llm import LLMClient
 from src.clients.misskey import MisskeyClient
 from src.core.constants import (
     EMOJI_DATA_PATH,
@@ -46,13 +46,13 @@ class EmojiService:
         return emoji_name in self._valid_emoji_names
 
     async def preprocess_emojis(
-        self, misskey_client: MisskeyClient, gemini_client: GeminiClient
+        self, misskey_client: MisskeyClient, llm_client: LLMClient
     ) -> None:
         """Fetch and categorize custom emojis.
 
         Args:
             misskey_client: Misskey API client
-            gemini_client: Gemini API client
+            llm_client: LLM API client
 
         Raises:
             EmojiDataError: If preprocessing fails
@@ -81,7 +81,7 @@ class EmojiService:
         logger.info(f"Saved raw emoji data to {RAW_EMOJI_DATA_PATH}")
 
         # Categorize emojis
-        categorized_emojis = await self._categorize_emojis(all_emojis, gemini_client)
+        categorized_emojis = await self._categorize_emojis(all_emojis, llm_client)
 
         # Calculate statistics
         stats = {cat: len(emojis) for cat, emojis in categorized_emojis.items()}
@@ -135,36 +135,36 @@ class EmojiService:
             self._valid_emoji_names.clear()
 
     async def _categorize_emojis(
-        self, emojis: List[Dict[str, Any]], gemini_client: GeminiClient
+        self, emojis: List[Dict[str, Any]], llm_client: LLMClient
     ) -> Dict[str, List[Dict[str, Any]]]:
-        """Categorize emojis using Gemini API or fallback method.
+        """Categorize emojis using LLM API or fallback method.
 
         Args:
             emojis: List of emoji data
-            gemini_client: Gemini API client
+            llm_client: LLM API client
 
         Returns:
             Dictionary mapping categories to emoji lists
         """
         try:
-            logger.info("Attempting to categorize emojis using Gemini API")
+            logger.info("Attempting to categorize emojis using LLM API")
             allowed_categories = list(EMOTION_CATEGORIES.keys())
-            gemini_categories = await gemini_client.categorize_emojis(
+            llm_categories = await llm_client.categorize_emojis(
                 emojis, allowed_categories
             )
 
             # Build categorized emojis dictionary
             categorized_emojis: Dict[str, List[Dict[str, Any]]] = {}
-            for category, emoji_names in gemini_categories.items():
+            for category, emoji_names in llm_categories.items():
                 categorized_emojis[category] = [
                     emoji for emoji in emojis if emoji.get("name") in emoji_names
                 ]
 
-            logger.info("Successfully categorized emojis using Gemini API")
+            logger.info("Successfully categorized emojis using LLM API")
             return categorized_emojis
 
         except Exception as e:
-            logger.error(f"Gemini categorization failed: {e}")
+            logger.error(f"LLM categorization failed: {e}")
             logger.info("Falling back to keyword-based categorization")
             return self._categorize_emojis_fallback(emojis)
 

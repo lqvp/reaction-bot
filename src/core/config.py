@@ -25,9 +25,7 @@ class MisskeyConfig(BaseModel):
         in ["true", "1", "yes"]
     )
     http_user_agent: str = Field(
-        default_factory=lambda: os.getenv(
-            "HTTP_USER_AGENT", "MisskeyReactionBot/1.0"
-        )
+        default_factory=lambda: os.getenv("HTTP_USER_AGENT", "MisskeyReactionBot/1.0")
     )
 
     @computed_field  # type: ignore[misc]
@@ -55,13 +53,19 @@ class MisskeyConfig(BaseModel):
         return f"{self.ws_protocol}://{self.ws_host}/streaming?i={self.token}"
 
 
-class GeminiConfig(BaseModel):
-    """Gemini API configuration."""
+class LLMConfig(BaseModel):
+    """LLM API configuration (OpenAI-compatible)."""
 
-    api_key: str = Field(default_factory=lambda: os.getenv("GEMINI_API_KEY", ""))
-    model: str = Field(
-        default_factory=lambda: os.getenv("GEMINI_MODEL", "gemini-2.0-flash-lite")
+    api_key: str = Field(
+        default_factory=lambda: os.getenv("OPENAI_API_KEY")
+        or os.getenv("GEMINI_API_KEY", "")
     )
+    base_url: str = Field(
+        default_factory=lambda: os.getenv(
+            "OPENAI_BASE_URL", "http://localhost:11434/v1"
+        )
+    )
+    model: str = Field(default_factory=lambda: os.getenv("LLM_MODEL", "gemma3:1b"))
 
 
 class LoggingConfig(BaseModel):
@@ -129,7 +133,7 @@ class Config(BaseModel):
     """Main configuration container."""
 
     misskey: MisskeyConfig = Field(default_factory=MisskeyConfig)
-    gemini: GeminiConfig = Field(default_factory=GeminiConfig)
+    llm: LLMConfig = Field(default_factory=LLMConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     reaction: ReactionConfig = Field(default_factory=ReactionConfig)
     retry: RetryConfig = Field(default_factory=RetryConfig)
@@ -146,8 +150,8 @@ class Config(BaseModel):
             errors.append("MISSKEY_WS_HOST is required")
         if not self.misskey.token:
             errors.append("MISSKEY_TOKEN is required")
-        if not self.gemini.api_key:
-            errors.append("GEMINI_API_KEY is required")
+        if not self.llm.api_key:
+            errors.append("OPENAI_API_KEY is required")
 
         if errors:
             raise ValueError(f"Configuration errors: {', '.join(errors)}")

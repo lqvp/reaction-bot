@@ -21,8 +21,8 @@ class MisskeyAPIError(BotException):
         self.status_code = status_code
 
 
-class GeminiAPIError(BotException):
-    """Raised when Gemini API returns an error."""
+class LLMAPIError(BotException):
+    """Raised when LLM API returns an error."""
 
     pass
 

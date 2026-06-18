@@ -1,19 +1,17 @@
-"""Gemini API client."""
+"""OpenAI-compatible LLM client."""
 
 import json
 import logging
+import re
 from typing import Any, Dict, List
 
-import google.generativeai as genai
+import openai
 from pydantic import BaseModel, Field
 
 from src.core.config import config
-from src.core.exceptions import GeminiAPIError
+from src.core.exceptions import LLMAPIError
 
 logger = logging.getLogger(__name__)
-
-# Configure Gemini API
-genai.configure(api_key=config.gemini.api_key)
 
 
 class ReactionResponse(BaseModel):
@@ -37,18 +35,16 @@ class EmojiCategorizationResponse(BaseModel):
     categories: List[EmojiCategory] = Field(description="List of emoji categories.")
 
 
-class GeminiClient:
-    """Client for interacting with Gemini API."""
+class LLMClient:
+    """Client for interacting with OpenAI-compatible LLM APIs."""
 
     def __init__(self) -> None:
-        """Initialize Gemini client."""
-        self.model = genai.GenerativeModel(config.gemini.model)
-        self._safety_settings = [
-            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
-        ]
+        """Initialize LLM client."""
+        self.client = openai.AsyncOpenAI(
+            base_url=config.llm.base_url,
+            api_key=config.llm.api_key,
+        )
+        self.model = config.llm.model
 
     async def generate_reaction(
         self, note_text: str, emoji_examples: List[str]
@@ -64,34 +60,30 @@ class GeminiClient:
         """
         prompt = self._create_reaction_prompt(note_text, emoji_examples)
 
-        generation_config = genai.types.GenerationConfig(
-            response_mime_type="application/json",
-            response_schema=ReactionResponse,
-        )
-
         try:
-            response = await self.model.generate_content_async(
-                contents=prompt,
-                generation_config=generation_config,
-                safety_settings=self._safety_settings,
+            response = await self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                response_format={"type": "json_object"},
             )
 
-            if response.text:
+            content = response.choices[0].message.content
+            if content:
                 try:
-                    parsed_data = ReactionResponse.model_validate_json(response.text)
+                    parsed_data = ReactionResponse.model_validate_json(content)
                     return parsed_data.reactions
                 except Exception as e:
                     logger.warning(
-                        f"Failed to parse reaction response: {e}, Response: {response.text}"
+                        f"Failed to parse reaction response: {e}, Response: {content}"
                     )
                     return None
             else:
-                logger.warning(f"Empty response from Gemini: {response}")
+                logger.warning("Empty response from LLM")
                 return None
 
-        except Exception as e:
-            logger.error(f"Gemini API error: {e}")
-            raise GeminiAPIError(f"Failed to generate reaction: {str(e)}")
+        except openai.APIError as e:
+            logger.error(f"LLM API error: {e}")
+            raise LLMAPIError(f"Failed to generate reaction: {str(e)}")
 
     async def generate_fallback_reaction(self, note_text: str) -> str:
         """Generate a fallback Unicode emoji reaction.
@@ -105,26 +97,30 @@ class GeminiClient:
         prompt = self._create_fallback_prompt(note_text)
 
         try:
-            result = await self.model.generate_content_async(prompt)
-            response_text = result.text.strip()
+            response = await self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                response_format={"type": "json_object"},
+            )
+
+            content = response.choices[0].message.content
+            if not content:
+                return "👍"
+
+            content = content.strip()
 
             # Try to parse JSON response
             try:
-                response_json = json.loads(response_text)
+                response_json = json.loads(content)
                 reaction = response_json.get("reaction")
                 if reaction:
                     return reaction
             except json.JSONDecodeError:
-                # Try to extract emoji from the response
-                import re
-
-                emoji_match = re.search(
-                    r'["\']([\p{Emoji}]+)["\']', response_text, re.UNICODE
-                )
+                # Try to extract emoji from quoted string
+                emoji_match = re.search(r'["\']([^"\']+)["\']', content)
                 if emoji_match:
                     return emoji_match.group(1)
 
-            # Final fallback
             return "👍"
 
         except Exception as e:
@@ -134,7 +130,7 @@ class GeminiClient:
     async def categorize_emojis(
         self, emojis: List[Dict[str, Any]], allowed_categories: List[str]
     ) -> Dict[str, List[str]]:
-        """Categorize emojis using Gemini API.
+        """Categorize emojis using LLM API.
 
         Args:
             emojis: List of emoji data
@@ -143,7 +139,6 @@ class GeminiClient:
         Returns:
             Dictionary mapping categories to emoji names
         """
-        # Process in chunks
         chunk_size = 50
         all_categories: Dict[str, List[str]] = {}
 
@@ -160,31 +155,25 @@ class GeminiClient:
                 emoji_list_text, allowed_categories
             )
 
-            generation_config = genai.types.GenerationConfig(
-                response_mime_type="application/json",
-                response_schema=EmojiCategorizationResponse,
-            )
-
             try:
-                response = await self.model.generate_content_async(
-                    contents=prompt,
-                    generation_config=generation_config,
-                    safety_settings=self._safety_settings,
+                response = await self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[{"role": "user", "content": prompt}],
+                    response_format={"type": "json_object"},
                 )
 
-                if response.text:
+                content = response.choices[0].message.content
+                if content:
                     parsed_data = EmojiCategorizationResponse.model_validate_json(
-                        response.text
+                        content
                     )
                     chunk_categories_list = parsed_data.categories
 
-                    # Convert list of objects to dict
                     chunk_categories = {
                         item.category_name: item.emoji_names
                         for item in chunk_categories_list
                     }
 
-                    # Merge categories
                     for cat, emoji_names in chunk_categories.items():
                         if cat in all_categories:
                             all_categories[cat].extend(emoji_names)
@@ -193,7 +182,7 @@ class GeminiClient:
 
             except Exception as e:
                 logger.error(f"Failed to categorize emoji chunk {i}: {e}")
-                raise GeminiAPIError(f"Emoji categorization failed: {str(e)}")
+                raise LLMAPIError(f"Emoji categorization failed: {str(e)}")
 
         # Filter to allowed categories
         allowed_set = set(allowed_categories)

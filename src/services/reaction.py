@@ -1,11 +1,12 @@
 """Reaction service for generating and applying reactions to notes."""
 
+import asyncio
 import logging
 import random
 import re
 from typing import Any, Dict
 
-from src.clients.gemini import GeminiClient
+from src.clients.llm import LLMClient
 from src.clients.misskey import MisskeyClient
 from src.core.config import config
 from src.core.constants import DEFAULT_EMOJI, EMOTION_CATEGORIES
@@ -20,19 +21,20 @@ class ReactionService:
     def __init__(
         self,
         misskey_client: MisskeyClient,
-        gemini_client: GeminiClient,
+        llm_client: LLMClient,
         emoji_service: EmojiService,
     ) -> None:
         """Initialize reaction service.
 
         Args:
             misskey_client: Misskey API client
-            gemini_client: Gemini API client
+            llm_client: LLM API client
             emoji_service: Emoji data service
         """
         self.misskey_client = misskey_client
-        self.gemini_client = gemini_client
+        self.llm_client = llm_client
         self.emoji_service = emoji_service
+        self.last_reaction_source: str = "unknown"
 
     async def generate_reaction(self, note_text: str) -> str:
         """Generate an appropriate reaction for the given note text.
@@ -58,6 +60,7 @@ class ReactionService:
 
         # Final fallback
         logger.warning("All reaction generation methods failed, using default emoji")
+        self.last_reaction_source = "unicode"
         return DEFAULT_EMOJI
 
     async def apply_reaction(self, note_id: str, reaction: str) -> bool:
@@ -78,7 +81,7 @@ class ReactionService:
         return success
 
     async def _generate_custom_emoji_reaction(self, note_text: str) -> str | None:
-        """Generate a custom emoji reaction using Gemini API.
+        """Generate a custom emoji reaction using LLM API.
 
         Args:
             note_text: Text content of the note
@@ -95,11 +98,12 @@ class ReactionService:
         # Try to generate reaction with retries
         for attempt in range(config.retry.max_retries):
             try:
-                reaction = await self.gemini_client.generate_reaction(
+                reaction = await self.llm_client.generate_reaction(
                     note_text, emoji_examples
                 )
                 if reaction and self._is_valid_custom_emoji(reaction):
                     logger.debug(f"Generated custom emoji reaction: {reaction}")
+                    self.last_reaction_source = "llm"
                     return reaction
                 else:
                     logger.warning(
@@ -111,9 +115,13 @@ class ReactionService:
                 )
                 if attempt == config.retry.max_retries - 1:
                     break
+                await asyncio.sleep(config.retry.retry_delay)
 
         # Fallback to random emoji
-        return self._get_random_custom_emoji()
+        result = self._get_random_custom_emoji()
+        if result:
+            self.last_reaction_source = "random"
+        return result
 
     async def _generate_unicode_emoji_reaction(self, note_text: str) -> str:
         """Generate a unicode emoji reaction as fallback.
@@ -125,9 +133,12 @@ class ReactionService:
             Unicode emoji string
         """
         try:
-            return await self.gemini_client.generate_fallback_reaction(note_text)
+            result = await self.llm_client.generate_fallback_reaction(note_text)
+            self.last_reaction_source = "unicode"
+            return result
         except Exception as e:
             logger.error(f"Error generating unicode emoji: {e}")
+            self.last_reaction_source = "unicode"
             return DEFAULT_EMOJI
 
     def _prepare_emoji_examples(self) -> list[str]:

@@ -2,7 +2,7 @@
 
 import asyncio
 
-from src.clients.gemini import GeminiClient
+from src.clients.llm import LLMClient
 from src.clients.misskey import MisskeyClient
 from src.core.config import config
 from src.core.exceptions import ConfigurationError, EmojiDataError
@@ -28,14 +28,14 @@ async def main() -> None:
 
     # Initialize clients
     misskey_client = MisskeyClient()
-    gemini_client = GeminiClient()
+    llm_client = LLMClient()
 
     # Initialize emoji service
     emoji_service = EmojiService()
 
     try:
         # Process emojis
-        await emoji_service.preprocess_emojis(misskey_client, gemini_client)
+        await emoji_service.preprocess_emojis(misskey_client, llm_client)
         logger.info("Emoji preprocessing completed successfully")
     except EmojiDataError as e:
         logger.error(f"Emoji processing error: {e}")

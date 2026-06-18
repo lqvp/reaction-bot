@@ -22,6 +22,19 @@ class MisskeyClient:
             "Content-Type": "application/json",
             "User-Agent": config.misskey.http_user_agent,
         }
+        self._session: aiohttp.ClientSession | None = None
+
+    async def _get_session(self) -> aiohttp.ClientSession:
+        """Get or create an aiohttp session."""
+        if self._session is None or self._session.closed:
+            timeout = aiohttp.ClientTimeout(total=10)
+            self._session = aiohttp.ClientSession(timeout=timeout)
+        return self._session
+
+    async def close(self) -> None:
+        """Close the aiohttp session."""
+        if self._session and not self._session.closed:
+            await self._session.close()
 
     async def _make_request(
         self, endpoint: str, data: Dict[str, Any] | None = None
@@ -43,23 +56,21 @@ class MisskeyClient:
             data = {}
         data["i"] = self.token
 
-        async with aiohttp.ClientSession() as session:
-            try:
-                async with session.post(
-                    url, headers=self.headers, json=data
-                ) as response:
-                    if response.status in (200, 204):
-                        if response.status == 204:
-                            return None
-                        return await response.json()
-                    else:
-                        error_text = await response.text()
-                        raise MisskeyAPIError(
-                            f"API request failed: {error_text}", response.status
-                        )
-            except aiohttp.ClientError as e:
-                logger.error(f"Network error during API request: {e}")
-                raise MisskeyAPIError(f"Network error: {str(e)}")
+        session = await self._get_session()
+        try:
+            async with session.post(url, headers=self.headers, json=data) as response:
+                if response.status in (200, 204):
+                    if response.status == 204:
+                        return None
+                    return await response.json()
+                else:
+                    error_text = await response.text()
+                    raise MisskeyAPIError(
+                        f"API request failed: {error_text}", response.status
+                    )
+        except aiohttp.ClientError as e:
+            logger.error(f"Network error during API request: {e}")
+            raise MisskeyAPIError(f"Network error: {str(e)}")
 
     async def get_account_info(self) -> Dict[str, Any]:
         """Get current account information.

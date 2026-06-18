@@ -3,7 +3,7 @@
 import asyncio
 from typing import Any, Dict
 
-from src.clients.gemini import GeminiClient
+from src.clients.llm import LLMClient
 from src.clients.misskey import MisskeyClient
 from src.core.config import config
 from src.core.constants import NOTE_PROCESSING_DELAY
@@ -30,13 +30,13 @@ class MisskeyReactionBot:
 
         # Initialize clients
         self.misskey_client = MisskeyClient()
-        self.gemini_client = GeminiClient()
+        self.llm_client = LLMClient()
 
         # Initialize services
         self.emoji_service = EmojiService()
         self.stats_service = StatsService()
         self.reaction_service = ReactionService(
-            self.misskey_client, self.gemini_client, self.emoji_service
+            self.misskey_client, self.llm_client, self.emoji_service
         )
 
         # Initialize handler
@@ -79,6 +79,7 @@ class MisskeyReactionBot:
         # Stop components
         await self.websocket_handler.stop()
         await self.stats_service.stop_periodic_logging()
+        await self.misskey_client.close()
 
         # Log final statistics
         logger.info(self.stats_service.get_stats_summary())
@@ -117,12 +118,13 @@ class MisskeyReactionBot:
             reaction = await self.reaction_service.generate_reaction(note_text)
 
             # Track reaction generation source
-            if reaction.startswith(":") and reaction.endswith(":"):
-                self.stats_service.increment("gemini_success_count")
-            elif len(reaction) == 1:  # Unicode emoji
-                self.stats_service.increment("unicode_fallback_count")
-            else:
+            source = self.reaction_service.last_reaction_source
+            if source == "llm":
+                self.stats_service.increment("llm_success_count")
+            elif source == "random":
                 self.stats_service.increment("random_fallback_count")
+            elif source == "unicode":
+                self.stats_service.increment("unicode_fallback_count")
 
             # Apply reaction
             success = await self.reaction_service.apply_reaction(note_id, reaction)

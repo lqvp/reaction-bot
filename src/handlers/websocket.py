@@ -55,6 +55,8 @@ class WebSocketHandler:
                 await self._handle_reconnect()
             except Exception as e:
                 logger.error(f"WebSocket error: {e}", exc_info=True)
+                if self.on_disconnect_callback:
+                    await self.on_disconnect_callback()
                 await self._handle_reconnect()
 
     async def stop(self) -> None:
